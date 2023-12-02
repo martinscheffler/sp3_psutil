@@ -22,6 +22,7 @@ ALIAS_REBIRTH = 4
 ALIAS_OS = 5
 ALIAS_OS_VERSION = 6
 
+SEQ = 0  # Sequence number of payload
 BDSEQ = 0  # Birth death sequence number
 IS_CONNECTED = False
 
@@ -40,7 +41,18 @@ class Identifier:
 
 
 def now_millis() -> int:
-    return int(round(time.time() * 1000))
+    return int(time.mktime(time.gmtime()) * 1000)
+
+
+def next_seq() -> int:
+    # Count up from 0 to 255, then start at 0 again
+    global SEQ
+    seq = SEQ
+    if SEQ == 255:
+        SEQ = 0
+    else:
+        SEQ += 1
+    return seq
 
 
 def add_metric(payload: spb.Payload, datatype: int, alias: int) -> spb.Payload.Metric:
@@ -72,6 +84,7 @@ def create_payload(is_birth: bool) -> spb.Payload:
 
     payload = spb.Payload()
     payload.timestamp = now
+    payload.seq = next_seq()
 
     # Fetch values from psutil and write to metrics
     usage = psutil.disk_usage("/")
@@ -144,7 +157,6 @@ def on_disconnect(client: mqtt.Client, ident: Identifier, rc):
     while True:
         try:
             print("Trying to reconnect to the broker...")
-            time.sleep(30)
             send_death_message(client, ident)
             client.reconnect()
             break
