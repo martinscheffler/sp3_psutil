@@ -1,8 +1,6 @@
 import argparse
 import socket  # Only used for getting host name of current machine
 import time
-from dataclasses import dataclass
-
 import psutil
 import paho.mqtt.client as mqtt
 import sparkplug_b_pb2 as spb  # The python code generated from protoc
@@ -25,6 +23,7 @@ ALIAS_OS_VERSION = 6
 SEQ = 0  # Sequence number of payload
 BDSEQ = 0  # Birth death sequence number
 IS_CONNECTED = False
+LAST_USAGE_PERCENT: int | None = None
 
 # Name strings for the metrics
 METRIC_NAME_REBIRTH = "Node Control/Rebirth"
@@ -34,10 +33,10 @@ METRIC_NAME_CPU_PERCENT = "System/CpuPercent"
 
 
 # Bundle group_id and node_id into a single object
-@dataclass
 class Identifier:
-    group_id: str
-    node_id: str
+    def __init__(self, group_id: str, node_id: str):
+        self.group_id = group_id
+        self.node_id = node_id
 
 
 def now_millis() -> int:
@@ -87,9 +86,15 @@ def create_payload(is_birth: bool) -> spb.Payload:
     payload.seq = next_seq()
 
     # Fetch values from psutil and write to metrics
-    usage = psutil.disk_usage("/")
-    usage_percent = usage.used / usage.total * 100
-    disk_usage = add_float_metric(payload, ALIAS_DISK_USAGE, usage_percent)
+    usage = psutil.disk_usage("/").percent
+    global LAST_USAGE_PERCENT
+    if usage != LAST_USAGE_PERCENT:
+        # Send disk usage only if it actually changed
+        LAST_USAGE_PERCENT = usage
+        disk_usage = add_float_metric(payload, ALIAS_DISK_USAGE, usage)
+    else:
+        disk_usage = None
+
     cpu_percent = add_float_metric(
         payload, ALIAS_CPU_PERCENT, psutil.cpu_percent(interval=1)
     )
@@ -105,6 +110,7 @@ def create_payload(is_birth: bool) -> spb.Payload:
 
         # Set name strings
         bdseq.name = METRIC_NAME_BDSEQ
+
         disk_usage.name = METRIC_NAME_DISK_USAGE
         cpu_percent.name = METRIC_NAME_CPU_PERCENT
 
