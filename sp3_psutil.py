@@ -40,8 +40,9 @@ class Identifier:
 
 
 def now_millis() -> int:
-    return int(time.mktime(time.gmtime()) * 1000)
-
+    ret = int(time.time() * 1000)
+    print(f"now_millis: {ret}")
+    return ret
 
 def next_seq() -> int:
     # Count up from 0 to 255, then start at 0 again
